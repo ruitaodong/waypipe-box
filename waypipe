@@ -1,0 +1,27 @@
+#!/bin/sh
+# Host-side stand-in for waypipe: runs the real waypipe from the waypipe-box
+# image, sharing /tmp, the runtime dir and $HOME with this host.
+# Install as ~/.local/bin/waypipe so SSH login shells find it first.
+ENGINE=${WAYPIPE_BOX_ENGINE:-docker}     # or: podman
+IMAGE=${WAYPIPE_BOX_IMAGE:-waypipe-box}
+
+uid=$(id -u); gid=$(id -g)
+rt=${XDG_RUNTIME_DIR:-/run/user/$uid}
+
+tty=""
+[ -t 0 ] && tty="-t"
+
+if [ "$ENGINE" = podman ]; then
+  userargs="--userns=keep-id"
+else
+  userargs="--user $uid:$gid"
+fi
+
+exec "$ENGINE" run --rm -i $tty $userargs \
+  --network host --ipc host \
+  -e XDG_RUNTIME_DIR="$rt" -e HOME="$HOME" -e TERM -e LANG \
+  -v /etc/passwd:/etc/passwd:ro -v /etc/group:/etc/group:ro \
+  -v /tmp:/tmp \
+  -v "$rt:$rt" \
+  -v "$HOME:$HOME" -w "$HOME" \
+  "$IMAGE" waypipe "$@"
